@@ -10,6 +10,7 @@ class ControllerCommonHome extends Controller {
 		}
 
 		$this->load->model('catalog/product');
+		$this->load->model('catalog/category');
 		$this->load->model('design/banner');
 		$this->load->model('tool/image');
 
@@ -73,6 +74,145 @@ class ControllerCommonHome extends Controller {
 				}
 
 				$data['featureds'][] = $featured_item;
+			}
+		}
+
+		// Slider banners
+		$data['banners_slider'] = array();
+		$results = $this->model_design_banner->getBanner(defined('BANNER_SLIDER_ID') ? BANNER_SLIDER_ID : 1);
+		foreach ($results as $result) {
+			if (is_file(DIR_IMAGE . $result['image'])) {
+				$data['banners_slider'][] = array(
+					'image' => $this->model_tool_image->resize($result['image'], 1185, 590),
+					'href'  => $result['link'],
+					'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+				);
+			}
+		}
+
+		// Right side banners
+		$data['banners_right'] = array();
+		$results = $this->model_design_banner->getBanner(defined('BANNER_RIGHT_ID') ? BANNER_RIGHT_ID : 2);
+		foreach ($results as $result) {
+			if (is_file(DIR_IMAGE . $result['image'])) {
+				$data['banners_right'][] = array(
+					'image' => $this->model_tool_image->resize($result['image'], 381, 277),
+					'href'  => $result['link'],
+					'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+				);
+			}
+		}
+
+		// Left sidebar banner
+		$data['banners_left'] = array();
+		$results = $this->model_design_banner->getBanner(defined('BANNER_LEFT_ID') ? BANNER_LEFT_ID : 3);
+		foreach ($results as $result) {
+			if (is_file(DIR_IMAGE . $result['image'])) {
+				$data['banners_left'][] = array(
+					'image' => $this->model_tool_image->resize($result['image'], 270, 460),
+					'href'  => $result['link'],
+					'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+				);
+			}
+		}
+
+		// Bottom banners (2-column inside tabs area)
+		$data['banners_bottom'] = array();
+		$results = $this->model_design_banner->getBanner(defined('BANNER_BOTTOM_ID') ? BANNER_BOTTOM_ID : 4);
+		foreach ($results as $result) {
+			if (is_file(DIR_IMAGE . $result['image'])) {
+				$data['banners_bottom'][] = array(
+					'image' => $this->model_tool_image->resize($result['image'], 555, 260),
+					'href'  => $result['link'],
+					'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+				);
+			}
+		}
+
+		// Sub banners (2-column)
+		$data['banners_sub'] = array();
+		$results = $this->model_design_banner->getBanner(defined('BANNER_SUB_ID') ? BANNER_SUB_ID : 5);
+		foreach ($results as $result) {
+			if (is_file(DIR_IMAGE . $result['image'])) {
+				$data['banners_sub'][] = array(
+					'image' => $this->model_tool_image->resize($result['image'], 555, 260),
+					'href'  => $result['link'],
+					'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+				);
+			}
+		}
+
+		// Latest products
+		$data['latest'] = array();
+		$latest_results = $this->model_catalog_product->getProducts(array(
+			'sort'  => 'date_added',
+			'order' => 'DESC',
+			'start' => 0,
+			'limit' => 5,
+		));
+		foreach ($latest_results as $result) {
+			if ($result['image']) {
+				$image = $this->model_tool_image->resize($result['image'], 300, 348);
+			} else {
+				$image = $this->model_tool_image->resize('placeholder.png', 300, 348);
+			}
+
+			if ($result['image2']) {
+				$image2 = $this->model_tool_image->resize($result['image2'], 300, 348);
+			} else {
+				$image2 = false;
+			}
+
+			if ($this->customer->isLogged() || !$this->config->get('config_customer_price')) {
+				$price = $this->currency->format($this->tax->calculate($result['price'], $result['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
+			} else {
+				$price = false;
+			}
+
+			if ((float)$result['special']) {
+				$special = $this->currency->format($this->tax->calculate($result['special'], $result['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
+			} else {
+				$special = false;
+			}
+
+			if ($this->config->get('config_tax')) {
+				$tax = $this->currency->format((float)$result['special'] ? $result['special'] : $result['price'], $this->session->data['currency']);
+			} else {
+				$tax = false;
+			}
+
+			$data['latest'][] = array(
+				'product_id'  => $result['product_id'],
+				'thumb'       => $image,
+				'thumb2'      => $image2,
+				'name'        => $result['name'],
+				'description' => utf8_substr(strip_tags(html_entity_decode($result['description'], ENT_QUOTES, 'UTF-8')), 0, 100) . '..',
+				'price'       => $price,
+				'special'     => $special,
+				'tax'         => $tax,
+				'href'        => $this->url->link('product/product', 'product_id=' . $result['product_id']),
+			);
+		}
+
+		// Hot categories (top-level categories with images and children)
+		$data['categories_featured'] = array();
+		$top_categories = $this->model_catalog_category->getCategories(0);
+		foreach ($top_categories as $cat) {
+			if ($cat['image']) {
+				$cat_children = $this->model_catalog_category->getCategories($cat['category_id']);
+				$children = array();
+				foreach ($cat_children as $child) {
+					$children[] = array(
+						'name' => $child['name'],
+						'href' => $this->url->link('product/category', 'path=' . $cat['category_id'] . '_' . $child['category_id']),
+					);
+				}
+				$data['categories_featured'][] = array(
+					'name'     => $cat['name'],
+					'image'    => $this->model_tool_image->resize($cat['image'], 160, 220),
+					'href'     => $this->url->link('product/category', 'path=' . $cat['category_id']),
+					'children' => $children,
+				);
 			}
 		}
 
