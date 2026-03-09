@@ -1,0 +1,8 @@
+image/*
+system/storage/cache/*
+system/storage/modification/*
+system/storage/logs/*
+system/storage/session/*
+_catalog/view/theme/default/template~/*
+config.php
+admin/config.php

@@ -1,0 +1,319 @@
+<?php print $header; ?>
+
+        <!-- Banner Home -->
+        <section class="tf-slideshow">
+            <div class="slider_wrap type-2">
+                <div class="sld-image">
+                    <img src="/image/catalog/slider/slider.jpg" data-src="/image/catalog/slider/slider.jpg" alt="" class="lazyload">
+                </div>
+                <div class="sld-content-2">
+                    <div class="container">
+                        <div class="content-sld text-center">
+                            <h6 class="text-white text-uppercase">В тренде</h6>
+                            <p class="title-sld-3 font-2"> 
+                                Скажите о своих <br class="d-none d-md-block">
+                                чувствах красиво
+                            </p>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-6 col-12 offset-sm-6">
+                                <div class="content-sld-2">
+                                    <p class="sub-title-sld-2 ">
+                                        Исследуйте нашу коллекцию украшений ручной работы, <br class="d-none d-lg-block">
+                                        где вечная элегантность встречается с современным стилем. <br class="d-none d-lg-block"> 
+                                        Подчеркните свою индивидуальность — сделайте свой <br class="d-none d-lg-block"> 
+                                        выбор сегодня.
+                                    </p>
+                                    <div class="btn-group">
+                                        <a href="/catalog/" class="tf-btn type-large style-white-2">
+                                            В каталог
+                                            <i class="icon-arrow-right fs-24"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sld-img-item d-none d-xxl-block">
+                    <img src="/assets/images/slider/img-item.jpg" data-src="/assets/images/slider/img-item.jpg?AAA" alt="" class="lazyload">
+                </div>
+            </div>
+        </section>
+        <!-- /Banner Home -->
+        <!-- Collection -->
+        <div class="flat-spacing-3 pb-0">
+            <div class="container">
+                <div dir="ltr" class="swiper tf-swiper wow fadeInUp" data-preview="3" data-tablet="2" data-mobile-sm="2" data-mobile="1"
+                    data-pagination="1" data-pagination-sm="2" data-pagination-md="2" data-pagination-lg="3">
+                    <div class="swiper-wrapper">
+                        <!-- item 1 -->
+                        <div class="swiper-slide">
+                            <div class="promo-circle hover-img">
+                                <div class="image img-style">
+                                    <img src="/assets/images/collections/promo-1.jpg" data-src="/assets/images/collections/promo-1.jpg" alt="" class="lazyload">
+                                </div>
+                                <h3 class="title">
+                                    <a href="/catalog/" class="text-primary-3">
+                                        Вечная классика
+                                    </a>
+                                </h3>
+                                <p class="sub-title font-4 letter-space-0">
+                                    Элегантный дизайн, который никогда не выходит из моды и идеально подходит для любого случая.
+                                </p>
+                                <a href="/catalog/" class="tf-btn type-large border-0 fw-medium">
+                                    В каталог
+                                    <i class="icon icon-arrow-top-right-2"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <!-- item 2 -->
+                        <div class="swiper-slide">
+                            <div class="promo-circle hover-img">
+                                <div class="image img-style">
+                                    <img src="/assets/images/collections/promo-2.jpg" data-src="/assets/images/collections/promo-2.jpg" alt="" class="lazyload">
+                                </div>
+                                <h3 class="title">
+                                    <a href="/catalog/" class="text-primary-3">
+                                        Современная роскошь
+                                    </a>
+                                </h3>
+                                <p class="sub-title font-4 letter-space-0">
+                                    Стильные и современные украшения для тех, кто задаёт тренды сегодня.
+                                </p>
+                                <a href="/catalog/" class="tf-btn type-large border-0 fw-medium">
+                                    В каталог
+                                    <i class="icon icon-arrow-top-right-2"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <!-- item 3 -->
+                        <div class="swiper-slide">
+                            <div class="promo-circle hover-img">
+                                <div class="image img-style">
+                                    <img src="/assets/images/collections/promo-3.jpg" data-src="/assets/images/collections/promo-3.jpg" alt="" class="lazyload">
+                                </div>
+                                <h3 class="title">
+                                    <a href="/catalog/" class="text-primary-3">
+                                        Особые моменты
+                                    </a>
+                                </h3>
+                                <p class="sub-title font-4 letter-space-0">
+                                    Изысканные украшения для любви, преданности и важных моментов жизни.
+                                </p>
+                                <a href="/catalog/" class="tf-btn type-large border-0 fw-medium">
+                                    В каталог
+                                    <i class="icon icon-arrow-top-right-2"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sw-dot-default tf-sw-pagination"></div>
+                </div>
+            </div>
+        </div>
+        <!-- /Collection -->
+        <!-- Best Seller -->
+        <section class="flat-spacing-3 flat-animate-tab product-tablist">
+            <div class="container">
+                <div class="sect-top align-items-end wow fadeInUp">
+                    <h2 class="s-title" style="text-transform:none">Хиты продаж</h2>
+                    <ul class="tab-prd" role="tablist">
+                        <?php $is_first = true; ?>
+                        <?php foreach ($featureds as $fid => $featured) { ?>
+                            <li>
+                                <h5><a href="#featured-tab-<?php print $fid; ?>" class="btn-tab<?php if ($is_first) {?> active<?php } ?>" data-bs-toggle="tab"><?php print $featured['name']; ?></a></h5>
+                            </li>
+                            <?php $is_first = false; ?>
+                        <?php } ?>
+                    </ul>
+                </div>
+                <div class="tab-content">
+                    <?php $is_first = true; ?>
+                    <?php foreach ($featureds as $fid => $featured) { ?>
+                        <div class="tab-pane<?php if ($is_first) {?> active show<?php } ?>" id="featured-tab-<?php print $fid; ?>" role="tabpanel">
+                            <div class="tf-btn-swiper-item<?php if ($is_first) {?> wow fadeInUp<?php } ?>">
+                                <div dir="ltr" class="swiper tf-swiper" data-preview="4" data-tablet="3" data-mobile-sm="2" data-mobile="2"
+                                    data-space-lg="30" data-space-md="20" data-space="15" data-pagination="2" data-pagination-sm="2"
+                                    data-pagination-md="3" data-pagination-lg="4">
+                                    <div class="swiper-wrapper">
+                                        <?php foreach ($featured['products'] as $product) { ?>
+                                            <div class="swiper-slide">
+                                                <div class="card_product--V01 type-space-35<?php if ($product['price'] == '0 ₽') { ?> out-of-stock<?php } ?>">
+                                                    <?php include(__DIR__ . '/../chunk/_product_item_inner.tpl'); ?>
+                                                </div>
+                                            </div>
+                                        <?php } ?>
+                                    </div>
+                                    <div class="sw-dot-default tf-sw-pagination d-flex d-xxl-none"></div>
+                                </div>
+                                <div class="nav-swiper style-2 nav-prev-swiper d-none d-xxl-flex">
+                                    <i class="icon-arrow-left"></i>
+                                </div>
+                                <div class="nav-swiper style-2 nav-next-swiper d-none d-xxl-flex">
+                                    <i class="icon-arrow-right"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <?php $is_first = false; ?>
+                    <?php } ?>
+                </div>
+            </div>
+        </section>
+        <!-- /Best Seller -->
+        <!-- Banner Text Line -->
+        <div class="banner_V04">
+            <div class="bn-content">
+                <h3 class="title text-white-2 fw-normal">
+                    Мы верим, что украшения — это больше, чем аксессуар. Это история индивидуальности и стиля. Наша тщательно отобранная коллекция объединяет вечное мастерство и современный дизайн, создавая украшения, которые помогают вам каждый день выражать свою уникальную элегантность.
+                </h3>
+            </div>
+        </div>
+        <!-- /Banner Text Line -->
+        <!-- Banner Image Text -->
+        <div class="flat-spacing-3">
+            <div class="flat-spacing-5 pt-0">
+                <div class="container">
+                    <div class="banner_V03 hover-img4">
+                        <?php $item = array_shift($banners_2items); ?>
+                        <div class="bn-image img-style4">
+                            <img src="<?php print $item['image']; ?>" data-src="<?php print $item['image']; ?>" alt="" class="lazyload">
+                        </div>
+                        <div class="bn-content wow fadeInUp">
+                            <h1 class="fw-normal">
+                                <a href="<?php print $item['href']; ?>" class="title"><?php print $item['name']; ?></a>
+                            </h1>
+                            <p class="sub-title text-main-8 ">
+                                <?php print $item['text']; ?>
+                            </p>
+                            <a href="<?php print $item['href']; ?>" class="tf-btn btn-def-2 type-large px-0">
+                                В каталог
+                                <i class="icon icon-arrow-right-3"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="container">
+                <div class="banner_V03 hover-img4 flex-wrap-reverse">
+                    <div class="bn-content wow fadeInUp">
+                        <?php $item = array_shift($banners_2items); ?>
+                        <h1 class="fw-normal">
+                            <a href="<?php print $item['href']; ?>" class="title">
+                                <?php print $item['name']; ?>
+                            </a>
+                        </h1>
+                        <p class="sub-title text-main-8 ">
+                            <?php print $item['text']; ?>
+                        </p>
+                        <a href="<?php print $item['href']; ?>" class="tf-btn btn-def-2 type-large px-0">
+                            В каталог
+                            <i class="icon icon-arrow-right-3"></i>
+                        </a>
+                    </div>
+                    <div class="bn-image img-style4">
+                        <img src="<?php print $item['image']; ?>" data-src="<?php print $item['image']; ?>" alt="" class="lazyload">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section>
+            <div class="container">
+                <h2 class="s-title text-center text-trans-none">Соберите образ</h2>
+                <div class="swiper tf-swiper" data-preview="3" data-tablet="2" data-mobile="1" data-space-lg="30" data-space-md="20" data-space="15"
+                    data-pagination="1" data-pagination-md="2" data-pagination-lg="3">
+                    <div class="swiper-wrapper">
+                        <?php foreach ($look as $look_item) { ?>
+                            <div class="swiper-slide">
+                                <div class="cls_videoV01">
+                                    <img src="<?php print $look_item['big_image']; ?>" alt="">
+                                    
+                                    <!-- 
+                                    <video class="hover-video" width="486" height="814" muted playsinline loop autoplay>
+                                        <source src="/assets/images/video/video.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video> -->
+                                    <div class="cls-content">
+                                        <div class="box-product">
+                                            <div class="img-product">
+                                                <img src="<?php print $look_item['small_image']; ?>" alt="<?php print $look_item['small_image']; ?>">
+                                            </div>
+                                            <div class="info-product">
+                                                <a href="<?php print $look_item['href']; ?>" class="name h5 fw-normal link text-white text-line-clamp-2">
+                                                    <?php print $look_item['name']; ?>
+                                                </a>
+                                                <div class="price-wrap style-white">
+                                                    <?php if ($look_item['special']) { ?>
+                                                        <span class="price-new h5 mb-0"><?php print $look_item['special']; ?></span>
+                                                        <span class="price-old fw-normal"><?php print $look_item['price']; ?></span>
+                                                    <?php } else { ?>
+                                                        <span class="price-new h5 mb-0"><?php print $look_item['price']; ?></span>
+                                                    <?php } ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <a href="<?php print $look_item['href']; ?>" class="tf-btn-icon style-circle style-small hover-tooltip">
+                                            <i class="icon icon-view"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php } ?>
+                    </div>
+                    <div class="sw-dot-default tf-sw-pagination"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="flat-spacing-3">
+            <div class="container">
+                <h2 class="s-title text-center text-trans-none wow fadeInUp">Только для тебя</h2>
+            </div>
+            <div class="tf-grid-layout md-col-2 xl-col-3 gap-0">
+                <?php foreach ($banners_6items as $banners_item) { ?>
+                    <div class="gallery-V01 wow fadeInUp">
+                        <a href="<?php print $banners_item['href']; ?>" class="image">
+                            <img src="<?php print $banners_item['image']; ?>" data-src="<?php print $banners_item['image']; ?>" alt="" class="lazyload">
+                        </a>
+                        <div class="content">
+                            <div class="wrap-name">
+                                <a href="#" class="h4 fw-normal link text-line-clamp-1"><?php print $banners_item['name']; ?></a>
+                                <p class="text-main-8"><?php print $banners_item['text']; ?></p>
+                            </div>
+                            <div class="text-nowrap">
+                                <a href="<?php print $banners_item['href']; ?>" class="tf-btn btn-def-2 type-large px-0">
+                                    В каталог
+                                    <i class="icon icon-arrow-right-3"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php } ?>
+            </div>
+        </section>
+        <!-- /Gallery -->
+        <!-- Promo -->
+        <section class="flat-spacing-3 pt-0">
+            <div class="container">
+                <div class="banner_promo wow fadeInUp">
+                    <h2 class="title fw-normal">Получи скидку 15% на первый заказ</h2>
+                    <p class="sub-title text-main-4">
+                        Присоединяйтесь сегодня и получите 15% скидку на первый заказ.<br/>
+                        Откройте для себя вечную элегантность по непреодолимым ценам!
+                    </p>
+                    <form class="form-email-2 style-border">
+                        <div class="form-content">
+                            <input type="email" placeholder="Электронная почта" required>
+                        </div>
+                        <button type="submit" class="tf-btn btn-def-2 type-large px-0">
+                            Зарегистрироваться
+                            <i class="icon-arrow-right-3"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </section>
+        <!-- /Promo -->
+        <?php include(__DIR__ . '/../chunk/_advs_peach.tpl'); ?>
+<?php print $footer; ?>

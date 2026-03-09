@@ -1,0 +1,1237 @@
+<?php
+error_reporting(E_ALL);
+ini_set('display_error', 1);
+ini_set('display_errors', 1);
+
+class ControllerCommonSync extends Controller {
+	private $work_file;
+	private $debug = false;
+
+	private $clientId = '852906';
+	private $apiKey   = '94869c49-5d5c-4d27-9db4-0c53e990d528';
+	private $base     = 'https://api-seller.ozon.ru';
+
+	function ozonRequest($url, $data) {
+	    $ch = curl_init($url);
+	    curl_setopt_array($ch, [
+	        CURLOPT_RETURNTRANSFER => true,
+	        CURLOPT_POST => true,
+	        CURLOPT_HTTPHEADER => [
+	            'Client-Id: ' . $this->clientId,
+	            'Api-Key: ' . $this->apiKey,
+	            'Content-Type: application/json'
+	        ],
+	        CURLOPT_POSTFIELDS => json_encode($data)
+	    ]);
+	    $response = curl_exec($ch);
+	    curl_close($ch);
+	    return json_decode($response, true);
+	}
+
+	public function __construct($registry) {
+		parent::__construct($registry);
+
+		$this->work_file = DIR_IMAGE . '/sync/import.txt';
+	}
+
+	public function getTotalProducts($data = array()) {
+		$sql = "SELECT COUNT(DISTINCT p.product_id) AS total";
+
+		if (!empty($data['filter_category_id'])) {
+			if (!empty($data['filter_sub_category'])) {
+				$sql .= " FROM " . DB_PREFIX . "category_path cp LEFT JOIN " . DB_PREFIX . "product_to_category p2c ON (cp.category_id = p2c.category_id)";
+			} else {
+				$sql .= " FROM " . DB_PREFIX . "product_to_category p2c";
+			}
+
+			if (!empty($data['filter_filter'])) {
+				$sql .= " LEFT JOIN " . DB_PREFIX . "product_filter pf ON (p2c.product_id = pf.product_id) LEFT JOIN " . DB_PREFIX . "product p ON (pf.product_id = p.product_id)";
+			} else {
+				$sql .= " LEFT JOIN " . DB_PREFIX . "product p ON (p2c.product_id = p.product_id)";
+			}
+		} else {
+			$sql .= " FROM " . DB_PREFIX . "product p";
+		}
+
+		$sql .= " LEFT JOIN " . DB_PREFIX . "product_description pd ON (p.product_id = pd.product_id) LEFT JOIN " . DB_PREFIX . "product_to_store p2s ON (p.product_id = p2s.product_id) WHERE pd.language_id = '" . (int)$this->config->get('config_language_id') . "' AND p.status = '1' AND p.date_available <= NOW() AND p2s.store_id = '" . (int)$this->config->get('config_store_id') . "'";
+
+		if (!empty($data['filter_category_id'])) {
+			if (!empty($data['filter_sub_category'])) {
+				$sql .= " AND cp.path_id = '" . (int)$data['filter_category_id'] . "'";
+			} else {
+				$sql .= " AND p2c.category_id = '" . (int)$data['filter_category_id'] . "'";
+			}
+
+			if (!empty($data['filter_filter'])) {
+				$implode = array();
+
+				$filters = explode(',', $data['filter_filter']);
+
+				foreach ($filters as $filter_id) {
+					$implode[] = (int)$filter_id;
+				}
+
+				$sql .= " AND pf.filter_id IN (" . implode(',', $implode) . ")";
+			}
+		}
+
+		if (!empty($data['filter_name']) || !empty($data['filter_tag'])) {
+			$sql .= " AND (";
+
+			if (!empty($data['filter_name'])) {
+				$implode = array();
+
+				$words = explode(' ', trim(preg_replace('/\s+/', ' ', $data['filter_name'])));
+
+				foreach ($words as $word) {
+					$implode[] = "pd.name LIKE '%" . $this->db->escape($word) . "%'";
+				}
+
+				if ($implode) {
+					$sql .= " " . implode(" AND ", $implode) . "";
+				}
+
+				if (!empty($data['filter_description'])) {
+					$sql .= " OR pd.description LIKE '%" . $this->db->escape($data['filter_name']) . "%'";
+				}
+			}
+
+			if (!empty($data['filter_name']) && !empty($data['filter_tag'])) {
+				$sql .= " OR ";
+			}
+
+			if (!empty($data['filter_tag'])) {
+				$implode = array();
+
+				$words = explode(' ', trim(preg_replace('/\s+/', ' ', $data['filter_tag'])));
+
+				foreach ($words as $word) {
+					$implode[] = "pd.tag LIKE '%" . $this->db->escape($word) . "%'";
+				}
+
+				if ($implode) {
+					$sql .= " " . implode(" AND ", $implode) . "";
+				}
+			}
+
+			if (!empty($data['filter_name'])) {
+				$sql .= " OR LCASE(p.model) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+				$sql .= " OR LCASE(p.sku) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+				$sql .= " OR LCASE(p.upc) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+				$sql .= " OR LCASE(p.ean) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+				$sql .= " OR LCASE(p.jan) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+				$sql .= " OR LCASE(p.isbn) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+				$sql .= " OR LCASE(p.mpn) = '" . $this->db->escape(utf8_strtolower($data['filter_name'])) . "'";
+			}
+
+			$sql .= ")";
+		}
+
+		if (!empty($data['filter_manufacturer_id'])) {
+			$sql .= " AND p.manufacturer_id = '" . (int)$data['filter_manufacturer_id'] . "'";
+		}
+
+		$query = $this->db->query($sql);
+
+		return $query->row['total'];
+	}
+
+	private function url_slug($str, $options = array()) {
+		// Make sure string is in UTF-8 and strip invalid UTF-8 characters
+		$str = mb_convert_encoding((string)$str, 'UTF-8', mb_list_encodings());
+		
+		$defaults = array(
+			'delimiter' => '-',
+			'limit' => null,
+			'lowercase' => true,
+			'replacements' => array(),
+			'transliterate' => true,
+		);
+		
+		// Merge options
+		$options = array_merge($defaults, $options);
+		
+		$char_map = array(
+			// Latin
+			'À' => 'A', 'Á' => 'A', 'Â' => 'A', 'Ã' => 'A', 'Ä' => 'A', 'Å' => 'A', 'Æ' => 'AE', 'Ç' => 'C', 
+			'È' => 'E', 'É' => 'E', 'Ê' => 'E', 'Ë' => 'E', 'Ì' => 'I', 'Í' => 'I', 'Î' => 'I', 'Ï' => 'I', 
+			'Ð' => 'D', 'Ñ' => 'N', 'Ò' => 'O', 'Ó' => 'O', 'Ô' => 'O', 'Õ' => 'O', 'Ö' => 'O', 'Ő' => 'O', 
+			'Ø' => 'O', 'Ù' => 'U', 'Ú' => 'U', 'Û' => 'U', 'Ü' => 'U', 'Ű' => 'U', 'Ý' => 'Y', 'Þ' => 'TH', 
+			'ß' => 'ss', 
+			'à' => 'a', 'á' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a', 'æ' => 'ae', 'ç' => 'c', 
+			'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e', 'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i', 
+			'ð' => 'd', 'ñ' => 'n', 'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ő' => 'o', 
+			'ø' => 'o', 'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u', 'ű' => 'u', 'ý' => 'y', 'þ' => 'th', 
+			'ÿ' => 'y',
+
+			// Latin symbols
+			'©' => '(c)',
+
+			// Greek
+			'Α' => 'A', 'Β' => 'B', 'Γ' => 'G', 'Δ' => 'D', 'Ε' => 'E', 'Ζ' => 'Z', 'Η' => 'H', 'Θ' => '8',
+			'Ι' => 'I', 'Κ' => 'K', 'Λ' => 'L', 'Μ' => 'M', 'Ν' => 'N', 'Ξ' => '3', 'Ο' => 'O', 'Π' => 'P',
+			'Ρ' => 'R', 'Σ' => 'S', 'Τ' => 'T', 'Υ' => 'Y', 'Φ' => 'F', 'Χ' => 'X', 'Ψ' => 'PS', 'Ω' => 'W',
+			'Ά' => 'A', 'Έ' => 'E', 'Ί' => 'I', 'Ό' => 'O', 'Ύ' => 'Y', 'Ή' => 'H', 'Ώ' => 'W', 'Ϊ' => 'I',
+			'Ϋ' => 'Y',
+			'α' => 'a', 'β' => 'b', 'γ' => 'g', 'δ' => 'd', 'ε' => 'e', 'ζ' => 'z', 'η' => 'h', 'θ' => '8',
+			'ι' => 'i', 'κ' => 'k', 'λ' => 'l', 'μ' => 'm', 'ν' => 'n', 'ξ' => '3', 'ο' => 'o', 'π' => 'p',
+			'ρ' => 'r', 'σ' => 's', 'τ' => 't', 'υ' => 'y', 'φ' => 'f', 'χ' => 'x', 'ψ' => 'ps', 'ω' => 'w',
+			'ά' => 'a', 'έ' => 'e', 'ί' => 'i', 'ό' => 'o', 'ύ' => 'y', 'ή' => 'h', 'ώ' => 'w', 'ς' => 's',
+			'ϊ' => 'i', 'ΰ' => 'y', 'ϋ' => 'y', 'ΐ' => 'i',
+
+			// Turkish
+			'Ş' => 'S', 'İ' => 'I', 'Ç' => 'C', 'Ü' => 'U', 'Ö' => 'O', 'Ğ' => 'G',
+			'ş' => 's', 'ı' => 'i', 'ç' => 'c', 'ü' => 'u', 'ö' => 'o', 'ğ' => 'g', 
+
+			// Russian
+			'А' => 'A', 'Б' => 'B', 'В' => 'V', 'Г' => 'G', 'Д' => 'D', 'Е' => 'E', 'Ё' => 'Yo', 'Ж' => 'Zh',
+			'З' => 'Z', 'И' => 'I', 'Й' => 'J', 'К' => 'K', 'Л' => 'L', 'М' => 'M', 'Н' => 'N', 'О' => 'O',
+			'П' => 'P', 'Р' => 'R', 'С' => 'S', 'Т' => 'T', 'У' => 'U', 'Ф' => 'F', 'Х' => 'H', 'Ц' => 'C',
+			'Ч' => 'Ch', 'Ш' => 'Sh', 'Щ' => 'Sh', 'Ъ' => '', 'Ы' => 'Y', 'Ь' => '', 'Э' => 'E', 'Ю' => 'Yu',
+			'Я' => 'Ya',
+			'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e', 'ё' => 'yo', 'ж' => 'zh',
+			'з' => 'z', 'и' => 'i', 'й' => 'j', 'к' => 'k', 'л' => 'l', 'м' => 'm', 'н' => 'n', 'о' => 'o',
+			'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u', 'ф' => 'f', 'х' => 'h', 'ц' => 'c',
+			'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sh', 'ъ' => '', 'ы' => 'y', 'ь' => '', 'э' => 'e', 'ю' => 'yu',
+			'я' => 'ya',
+
+			// Ukrainian
+			'Є' => 'Ye', 'І' => 'I', 'Ї' => 'Yi', 'Ґ' => 'G',
+			'є' => 'ye', 'і' => 'i', 'ї' => 'yi', 'ґ' => 'g',
+
+			// Czech
+			'Č' => 'C', 'Ď' => 'D', 'Ě' => 'E', 'Ň' => 'N', 'Ř' => 'R', 'Š' => 'S', 'Ť' => 'T', 'Ů' => 'U', 
+			'Ž' => 'Z', 
+			'č' => 'c', 'ď' => 'd', 'ě' => 'e', 'ň' => 'n', 'ř' => 'r', 'š' => 's', 'ť' => 't', 'ů' => 'u',
+			'ž' => 'z', 
+
+			// Polish
+			'Ą' => 'A', 'Ć' => 'C', 'Ę' => 'e', 'Ł' => 'L', 'Ń' => 'N', 'Ó' => 'o', 'Ś' => 'S', 'Ź' => 'Z', 
+			'Ż' => 'Z', 
+			'ą' => 'a', 'ć' => 'c', 'ę' => 'e', 'ł' => 'l', 'ń' => 'n', 'ó' => 'o', 'ś' => 's', 'ź' => 'z',
+			'ż' => 'z',
+
+			// Latvian
+			'Ā' => 'A', 'Č' => 'C', 'Ē' => 'E', 'Ģ' => 'G', 'Ī' => 'i', 'Ķ' => 'k', 'Ļ' => 'L', 'Ņ' => 'N', 
+			'Š' => 'S', 'Ū' => 'u', 'Ž' => 'Z',
+			'ā' => 'a', 'č' => 'c', 'ē' => 'e', 'ģ' => 'g', 'ī' => 'i', 'ķ' => 'k', 'ļ' => 'l', 'ņ' => 'n',
+			'š' => 's', 'ū' => 'u', 'ž' => 'z'
+		);
+		
+		// Make custom replacements
+		$str = preg_replace(array_keys($options['replacements']), $options['replacements'], $str);
+		
+		// Transliterate characters to ASCII
+		if ($options['transliterate']) {
+			$str = str_replace(array_keys($char_map), $char_map, $str);
+		}
+		
+		// Replace non-alphanumeric characters with our delimiter
+		$str = preg_replace('/[^\p{L}\p{Nd}]+/u', $options['delimiter'], $str);
+		
+		// Remove duplicate delimiters
+		$str = preg_replace('/(' . preg_quote($options['delimiter'], '/') . '){2,}/', '$1', $str);
+		
+		// Truncate slug to max. characters
+		$str = mb_substr($str, 0, ($options['limit'] ? $options['limit'] : mb_strlen($str, 'UTF-8')), 'UTF-8');
+		
+		// Remove delimiter from ends
+		$str = trim($str, $options['delimiter']);
+		
+		return $options['lowercase'] ? mb_strtolower($str, 'UTF-8') : $str;
+	}
+
+	private $products = array();
+	private $sizes = array();
+	private $sizes_reverse = array();
+
+	// private $categories = array();
+	// private $percents = array();
+	// private $groups = array();
+	// private $collections = array();
+
+	private $category2cid = array(
+		'Браслеты' => 110,
+		'Браслеты на ногу' => 120,
+		'Браслеты на ногу_Славянские обереги' => 121,
+		'Браслеты_Женские' => 111,
+		'Браслеты_Жесткие' => 115,
+		'Браслеты_Кожаные' => 113,
+		'Браслеты_Мужские' => 112,
+		'Браслеты_Нить' => 114,
+		'Браслеты_Пандора' => 116,
+		'Броши' => 130,
+		'Иконы' => 140,
+		'Иконы_Славянские обереги' => 141,
+		'Им.жемчуг' => 150,
+		'Им.жемчуг_Славянские обереги' => 151,
+		'Колье' => 160,
+		'Кольца' => 170,
+		'Кольца_Детские' => 173,
+		'Кольца_Дорожки' => 174,
+		'Кольца_Женские' => 171,
+		'Кольца_Короны' => 1801,
+		'Кольца_Крупные' => 178,
+		'Кольца_Мужские' => 172,
+		'Кольца_На фалангу' => 1802,
+		'Кольца_Обручальные' => 176,
+		'Кольца_Перстни' => 179,
+		'Кольца_Помолвочные' => 175,
+		'Кольца_Спаси и сохрани' => 177,
+		'Кресты' => 180,
+		'Ложка' => 190,
+		'Ложка_Славянские обереги' => 191,
+		'Перламутр' => 200,
+		'Перламутр_Славянские обереги' => 201,
+		'Пирсинг' => 210,
+		'Пирсинг в нос' => 220,
+		'Пирсинг_Банан' => 216,
+		'Пирсинг_В бровь' => 212,
+		'Пирсинг_В губу' => 213,
+		'Пирсинг_В пуп' => 211,
+		'Пирсинг_В язык' => 214,
+		'Пирсинг_Интим' => 215,
+		'Пирсинг_Штанга' => 217,
+		'Подвески' => 230,
+		'Подвески_Буквы' => 235,
+		'Подвески_Геометрические' => 2403,
+		'Подвески_Детские' => 232,
+		'Подвески_Женские' => 231,
+		'Подвески_Знаки Зодиака' => 234,
+		'Подвески_Камень на леске' => 238,
+		'Подвески_Капля' => 2404,
+		'Подвески_Кресты' => 236,
+		'Подвески_Круглые' => 2402,
+		'Подвески_Крупные' => 2405,
+		'Подвески_Маленькие' => 2615,
+		'Подвески_Мужские' => 233,
+		'Подвески_Подвески на браслет' => 239,
+		'Подвески_С жемчугом' => 2401,
+		'Подвески_Славянские обереги' => 237,
+		'Подстаканник' => 240,
+		'Подстаканник_Славянские обереги' => 241,
+		'Серьги' => 250,
+		'Серьги_Асимметрия' => 2613,
+		'Серьги_Гвоздики' => 255,
+		'Серьги_Детские' => 252,
+		'Серьги_Для невесты (свадебные)' => 254,
+		'Серьги_Дорожки' => 256,
+		'Серьги_Женские' => 251,
+		'Серьги_Капли' => 2602,
+		'Серьги_Квадратные' => 2605,
+		'Серьги_Круглые' => 2601,
+		'Серьги_Крупные' => 2606,
+		'Серьги_Маленькие' => 2607,
+		'Серьги_Мужские' => 253,
+		'Серьги_Овальные' => 2603,
+		'Серьги_Протяжки' => 258,
+		'Серьги_Прямоугольные' => 2604,
+		'Серьги_С жемчугом' => 2609,
+		'Серьги_С крестиком' => 2611,
+		'Серьги_С крупными камнями' => 2608,
+		'Серьги_С эмалью' => 2614,
+		'Серьги_Серьги-кольца' => 257,
+		'Серьги_Серьги-подвески' => 259,
+		'Серьги_Цветы' => 2610,
+		'Сувениры' => 260,
+		'Цепи' => 270,
+		'Шармы' => 280,
+		'Шармы_Сердце' => 283,
+		'Шармы_Шарми-подвески' => 282,
+		'Шармы_Шармы-бусины' => 281
+	);
+
+	private $attribute2aid = array(
+		'Номер комплекта' => 12,
+		'Акция' => 13,
+		'Популярное' => 14,
+		'Цвета вставок' => 15,
+		'Виды вставок' => 16,
+		'Кол-во камней' => 17,
+		'Тип застежки' => 18,
+	);
+
+	// private $default_cid = 137;
+
+	// private $property = array();
+	// private $options = array();
+	// private $headsets = array();
+
+	public function preParseFile() {
+
+		$list = $this->ozonRequest(
+	        $this->base . 'v1/description-category/tree',
+	        [
+	            "language" => "RU"
+	        ]
+	    );
+
+	    print_r($list);
+	    die;
+// https://api-seller.ozon.ru/v1/description-category/tree
+
+
+		$this->products = [];
+
+		$allProducts = [];
+		$lastId = '';
+
+		do {
+		    $list = $this->ozonRequest(
+		        $this->base . '/v3/product/list',
+		        [
+		            'filter' => ['visibility' => 'ALL'],
+		            'last_id' => $lastId,
+		            'limit' => 1000
+		        ]
+		    );
+
+		    foreach ($list['result']['items'] ?? [] as $item) {
+		        $allProducts[] = $item['product_id'];
+		    }
+
+		    $lastId = $list['result']['last_id'] ?? '';
+
+		} while ($lastId);
+
+		if (!$allProducts) die('Нет товаров');
+
+		$chunks = array_chunk($allProducts, 100);
+
+		foreach ($chunks as $chunk) {
+
+		    $info =$this->ozonRequest(
+		        $this->base . '/v3/product/info/list',
+		        ['product_id' => $chunk]
+		    );
+
+		    foreach ($info['items'] ?? [] as $item) {
+		    	$qty = 0;
+
+		    	$sku = false;
+		    	foreach ($item['stocks']['stocks'] as $stock) {
+		    		$sku = $stock['sku'];
+		    		$qty += $stock['present'];
+		    	}
+
+		        $id = $item['id'];
+
+		        $this->products[$id] = [
+		            'id'          => $id,
+		            'sku'         => $sku,
+		            'name'        => $item['name'],
+		            'image'       => $item['primary_image'] ? reset($item['primary_image']) : false,
+		            'images'      => $item['images'] ?? [],
+		            'qty'         => $qty,
+		            'href'        => 'https://www.ozon.ru/product/' . $sku,
+		            'attributes'  => [],
+		            'params'      => [],
+		        ];
+		    }
+		}
+
+		/**
+		 * 3️⃣ ХАРАКТЕРИСТИКИ (ИСПРАВЛЕНО)
+		 */
+		$cursor = '';
+
+		do {
+		    $attrs =$this->ozonRequest(
+		        $this->base . '/v4/product/info/attributes',
+		        [
+		            'filter' => [
+		                'product_id' => $allProducts,
+		                'visibility' => 'ALL'
+		            ],
+		            'limit' => 1000,
+		            'cursor' => $cursor,
+		            'sort_dir' => 'ASC'
+		        ]
+		    );
+
+		    // print '<pre>';
+		    // print_r($attrs);
+		    // die;
+
+		    foreach ($attrs['result'] ?? [] as $item) {
+		        $id = $item['id'];
+		        if (!isset($this->products[$id])) continue;
+
+		        foreach ($item['attributes'] as $attr) {
+		            $values = [];
+
+		            foreach ($attr['values'] as $v) {
+		                $values[] = $v['value'];
+		            }
+
+		            $this->products[$id]['attributes'][$attr['id']] = implode(', ', $values);
+		        }
+
+		        foreach (['barcode', 'height', 'depth', 'width', 'dimension_unit', 'weight', 'weight_unit', 'description_category_id'] as $key) { 
+		        	if (isset($item[$key])) {
+				        $this->products[$id]['params'][$key] = $item[$key];
+				    }
+			    }
+		    }
+
+		    $cursor = $attrs['result']['cursor'] ?? '';
+
+		} while ($cursor);
+
+	    print '<pre>';
+	    print_r($this->products);
+	    die;
+
+		/**
+		 * 4️⃣ ОПИСАНИЯ (иногда отдельный метод)
+		 */
+		foreach ($chunks as $chunk) {
+
+		    $desc =$this->ozonRequest(
+		        $this->base . '/v1/product/info/description',
+		        ['product_id' => $chunk]
+		    );
+
+		    foreach ($desc['result'] ?? [] as $item) {
+		        $id = $item['product_id'];
+		        if (isset($products[$id])) {
+		            $products[$id]['description'] = $item['description'] ?? '';
+		        }
+		    }
+		}
+
+		/**
+		 * 5️⃣ ЦЕНЫ (cursor pagination)
+		 */
+		$cursor = '';
+
+		do {
+		    $prices =$this->ozonRequest(
+		        $this->base . '/v5/product/info/prices',
+		        [
+		            'cursor' => $cursor,
+		            'filter' => ['visibility' => 'ALL'],
+		            'limit'  => 1000
+		        ]
+		    );
+
+		    foreach ($prices['result']['items'] ?? [] as $p) {
+		        $id = $p['product_id'];
+		        if (!isset($products[$id])) continue;
+
+		        $products[$id]['price']     = $p['price']['price'] ?? null;
+		        $products[$id]['old_price'] = $p['price']['old_price'] ?? null;
+		    }
+
+		    $cursor = $prices['result']['cursor'] ?? '';
+
+} while ($cursor);
+
+/**
+ * ГОТОВО
+ */
+print '<pre>';
+print_r($products);
+die;
+	}
+
+	public function processData() {
+		$this->db->query("UPDATE " . DB_PREFIX . "product SET sync_status = NULL");
+		// $this->db->query("UPDATE " . DB_PREFIX . "product_discount SET processed = 0");
+		// $this->db->query("UPDATE " . DB_PREFIX . "product_special SET processed = 0");
+
+		// обрабатываем товары
+		foreach ($this->products as $id => $product) {
+			// if ($id != '7023800000001') continue;
+			// print '<pre>';
+			// print_r($product);
+			// print '</pre>';
+			// die;
+
+			print $product['_model'] . "<br/>";
+			flush();
+
+			$r = $this->db->query("SELECT * FROM " . DB_PREFIX . "product WHERE (model = '" . $this->db->escape($product['_model']) . "')");
+			
+			//
+			$images = [];
+			if (file_exists(DIR_IMAGE . 'catalog/' . ($product['Металл'] == 2 ? 'Z' : 'S') . '/' . $product['Артикул'])) {
+				$photos = scandir(DIR_IMAGE . 'catalog/' . ($product['Металл'] == 2 ? 'Z' : 'S') . '/' . $product['Артикул']);
+				foreach ($photos as $i => $entry) {
+					if ($entry != '.' && $entry != '..' && $entry != 'index.php' && !is_dir($entry)) {
+						if (substr($entry, 0, strlen('square_')) == 'square_') continue;
+
+						$images[] = 'catalog/' . ($product['Металл'] == 2 ? 'Z' : 'S') . '/' . $product['Артикул'] . '/' . $entry;
+	                }
+	            }
+            }
+
+            natsort($images); // естественная сортировка
+            usort($images, function($a, $b) {
+			    // Получаем основное имя файла (до .jpg)
+			    $aName = pathinfo($a, PATHINFO_FILENAME);
+			    $bName = pathinfo($b, PATHINFO_FILENAME);
+
+			    // Выделим базу (например, 11 у 11.jpg и 11 у 11-1.jpg)
+			    $aBase = preg_replace('/-\d+$/', '', $aName);
+			    $bBase = preg_replace('/-\d+$/', '', $bName);
+
+			    // Если базовые части совпадают — главный файл без -N идёт первым
+			    if ($aBase === $bBase) {
+			        $aIsMain = preg_match('/-\d+$/', $aName) ? 1 : 0;
+			        $bIsMain = preg_match('/-\d+$/', $bName) ? 1 : 0;
+			        if ($aIsMain !== $bIsMain) {
+			            return $aIsMain - $bIsMain;
+			        }
+			        return strnatcmp($aName, $bName); // вторичная сортировка по естественному порядку
+			    }
+
+			    // Сортировка по базовому имени (естественно)
+			    return strnatcmp($aBase, $bBase);
+			});
+
+			if ($r->num_rows == 0) {
+				// print '<pre>';
+				// print_r($product);
+
+				$sql = "INSERT INTO " . DB_PREFIX . "product SET 
+					`model` = '" . $this->db->escape($product['_model']) . "', 
+					`sku` = '" . $this->db->escape($product['Артикул']) . "', 
+					`location` = '" . $this->db->escape($product['Модель']) . "',
+					`price` = '" . (float)$product['Цена розн'] . "',
+					`quantity` = " . ((float)$product['_quantity']) . ",
+					`stock_status_id` = 7,
+					`weight` = '" . ((float)$product['Вес']) . "', 
+					`weight_class_id` = 2,
+					`length_class_id` = 1, 
+					`sort_order` = 0,
+					`status` = 1, 
+					`date_added` = NOW(),
+					`sync_status` = 1";
+				$this->db->query($sql);
+
+				$product_id = $this->db->getLastId();
+
+				$sql = "INSERT INTO " . DB_PREFIX . "product_description SET 
+					`product_id` = " . $product_id . ", 
+					`language_id` = 1, 
+					`name` = '" . $this->db->escape($product['H1']) . "',
+					`meta_title` = '" . $this->db->escape($product['Title']) . "',
+					`meta_description` = '" . $this->db->escape($product['Description']) . "'";
+				$this->db->query($sql);
+
+				$sql = "INSERT INTO " . DB_PREFIX . "product_to_store SET 
+					`product_id` = " . $product_id . ", 
+					`store_id` = 0";
+				$this->db->query($sql);
+
+				if (sizeof($images) > 0) {
+					$image = array_shift($images);
+
+					$sql = "UPDATE " . DB_PREFIX . "product SET `image` = '" . $this->db->escape($image) . "', status = 1 WHERE `product_id` = " . $product_id;
+					$this->db->query($sql);
+				} else {
+					$sql = "UPDATE " . DB_PREFIX . "product SET `image` = '', status = 0 WHERE `product_id` = " . $product_id;
+					$this->db->query($sql);
+				}
+
+				$sql = "DELETE FROM " . DB_PREFIX . "product_image WHERE `product_id` = " . $product_id . "";
+				$this->db->query($sql);					
+				if (sizeof($images) > 0) {
+					foreach ($images as $image) {
+						$sql = "INSERT INTO " . DB_PREFIX . "product_image SET `product_id` = " . $product_id . ", `image` = '" . $this->db->escape($image) . "'";
+						$this->db->query($sql);
+					}
+				}
+
+				$main_category = 1;
+				foreach ($product['_category_ids'] as $cid) {
+					$sql = "INSERT IGNORE INTO " . DB_PREFIX . "product_to_category SET product_id = " . $product_id . ", category_id = " . (int)$cid . ", main_category = " . (int)$main_category;
+					$this->db->query($sql);
+
+					$main_category = 0;
+				}
+
+				// die('check plz');
+			} elseif ($r->num_rows == 1) {
+				$product_id = $r->row['product_id'];
+
+				// if (sizeof($images) > 0) {
+				// 	$need_img_update = false;
+				// 	$old_images = [$r->row['image']];
+
+				// 	$sql = "SELECT * FROM " . DB_PREFIX . "product_image WHERE `product_id` = " . $product_id;
+				// 	$rows = $this->db->query($sql)->rows;
+
+				// 	foreach ($rows as $row) {
+				// 		$old_images[] = $row['image'];
+				// 	}
+
+				// 	foreach ($old_images as $old_image) {
+				// 		if ((!file_exists(DIR_IMAGE . $old_image)) || (!is_file(DIR_IMAGE . $old_image))) {
+				// 			$need_img_update = true;
+				// 			break;
+				// 		}
+				// 	}
+
+				// 	if ($need_img_update) {
+				// 		if (sizeof($images) > 0) {
+				// 			$image = array_shift($images);
+
+				// 			$sql = "UPDATE " . DB_PREFIX . "product SET `image` = '" . $this->db->escape($image) . "', status = 1 WHERE `product_id` = " . $product_id;
+				// 			$this->db->query($sql);
+				// 		} else {
+				// 			$sql = "UPDATE " . DB_PREFIX . "product SET `image` = '', status = 0 WHERE `product_id` = " . $product_id;
+				// 			$this->db->query($sql);
+				// 		}
+
+				// 		$sql = "DELETE FROM " . DB_PREFIX . "product_image WHERE `product_id` = " . $product_id . "";
+				// 		$this->db->query($sql);					
+				// 		if (sizeof($images) > 0) {
+				// 			foreach ($images as $image) {
+				// 				$sql = "INSERT INTO " . DB_PREFIX . "product_image SET `product_id` = " . $product_id . ", `image` = '" . $this->db->escape($image) . "'";
+				// 				$this->db->query($sql);
+				// 			}
+				// 		}
+				// 	}
+				// } else {
+				// 	// нет картинок
+				// 	$sql = "UPDATE " . DB_PREFIX . "product SET `image` = '', status = 0 WHERE `product_id` = " . $product_id;
+				// 	$this->db->query($sql);
+
+				// 	$sql = "DELETE FROM " . DB_PREFIX . "product_image WHERE `product_id` = " . $product_id . "";
+				// 	$this->db->query($sql);
+				// }
+
+				// // отметка о синхроне
+				// $sql = "UPDATE " . DB_PREFIX . "product SET 
+				// 	`location` = '" . $this->db->escape($product['parent']) . "',
+				// 	`quantity` = " . (int)$product['quantity'] . ",
+				// 	`price` = " . (float)$product['price'] . ",
+				// 	`sort_order` = " . ((int)$product['sort_order']) . ",
+				// 	`sync_status` = 1 
+				// WHERE `product_id` = " . $product_id;
+				// $this->db->query($sql);
+			}
+
+			// проверка ЧПУ
+			$slug_r = $this->db->query("SELECT * FROM " . DB_PREFIX . "seo_url WHERE `query` = 'product_id=" . $product_id . "'");
+			if ($slug_r->num_rows == 0) {
+				$keyword = $this->url_slug($product['_model']);
+				$sql = "INSERT IGNORE INTO " . DB_PREFIX . "seo_url SET 
+					`store_id` = 0, 
+					`language_id` = 1, 
+					`query` = 'product_id=" . $product_id . "', 
+					`keyword` = '" . $this->db->escape($keyword) . "'";
+				$this->db->query($sql);
+			}
+
+			// атрибуты
+			$current_attributes = [];
+			$sql = "SELECT * FROM " . DB_PREFIX . "product_attribute WHERE product_id = " . $product_id . " AND attribute_id in (" . implode(',', array_values($this->attribute2aid)) . ")";
+			$attr_rows = $this->db->query($sql);
+			foreach ($attr_rows->rows as $row) {
+				$current_attributes[$row['attribute_id']] = $row['text'];
+			}
+
+			if ($this->debug) print __LINE__ . "<br/>";
+			foreach ($this->attribute2aid as $title => $aid) {
+				// if ($this->debug) print __LINE__ . ' - ' . $title . ' - ' . $aid . "<br/>";
+				// if ($this->debug) print_r($product);
+
+				if (!empty($product[$title])) {
+					if (is_array($product[$title])) {
+						$current_title = implode(";", $product[$title]);
+					} else {
+						$current_title = $product[$title];
+					}
+
+					// кейс 1 - существует
+					if (isset($current_attributes[$aid])) {
+						// кейс 1.1 - и не совпадает - обновляем
+						if ($current_attributes[$aid] != $current_title) {
+							$sql = "UPDATE " . DB_PREFIX . "product_attribute SET 
+								`text` = '" . $this->db->escape($current_title) . "' 
+							WHERE product_id = " . (int)$product_id . " AND attribute_id = " . (int)$aid;
+							$this->db->query($sql);
+
+							if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+						}
+					} else {
+						// кейс 2 - не существует
+						if (is_array($product[$title])) {
+							$current_title = implode(";", $product[$title]);
+						} else {
+							$current_title = $product[$title];
+						}
+
+						$sql = "INSERT INTO " . DB_PREFIX . "product_attribute SET 
+							`product_id` = " . (int)$product_id . ", 
+							`language_id` = 1, 
+							`attribute_id` = " . $aid . ", 
+							`text` = '" . $this->db->escape($current_title) . "'";
+						$this->db->query($sql);
+
+						if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+					}
+				} elseif (isset($current_attributes[$aid])) {
+					// нет в товаре - удаляем
+					$sql = "DELETE FROM " . DB_PREFIX . "product_attribute WHERE product_id = " . (int)$product_id . " AND attribute_id = " . (int)$aid;
+					$this->db->query($sql);
+
+					if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+				}
+			}
+			// атрибуты
+
+			// размеры
+			if (isset($product['_sizes'])) {
+				$customer_group_id = 1;
+
+				$current_sizes = [];
+				$sql = "SELECT * FROM " . DB_PREFIX . "product_option_value WHERE product_id = " . $product_id . " AND option_id = 11";
+				$attr_rows = $this->db->query($sql);
+				foreach ($attr_rows->rows as $row) {
+					$current_sizes[$customer_group_id][$row['option_value_id']] = $row;
+				}
+
+				// option_id
+				$r = $this->db->query("SELECT `product_option_id` FROM " . DB_PREFIX . "product_option po WHERE (`product_id` = " . $product_id . " AND po.`option_id` = 11)");
+				if ($r->num_rows == 0) {
+					// нет - добавляем
+					$sql = "INSERT INTO " . DB_PREFIX . "product_option SET 
+						`product_id` = " . $product_id . ", 
+						`option_id` = 11, 
+						`required` = 1";
+					$this->db->query($sql);
+
+					$product_option_id = $this->db->getLastId();
+				} else {
+					$product_option_id = $r->row['product_option_id'];
+				}
+				// /option_id
+
+				foreach ($product['_sizes'] as $size => $qty) {
+					$option_value_id = $this->sizes[$size];
+
+					// кейс 1 - существует
+					if (isset($current_sizes[$customer_group_id][$option_value_id])) {
+						// кейс 1.1 - и не совпадает - обновляем
+						// обновим 
+						$sql = "UPDATE " . DB_PREFIX . "product_option_value SET quantity = " . $qty . " WHERE (product_option_id = " . (int)$product_option_id . ") AND (product_id = " . (int)$product_id . ") AND (option_id = 11) AND (option_value_id = '" . (integer)$option_value_id . "')";
+						$this->db->query($sql);
+
+						unset($current_sizes[$customer_group_id][$option_value_id]);
+					} else {
+						// кейс 2 - не существует запись
+						// customer_group_id = " . (int)$customer_group_id . ",
+						$sql = "INSERT INTO " . DB_PREFIX . "product_option_value SET 
+							product_option_id = " . (int)$product_option_id . ",
+							product_id = " . (int)$product_id . ",
+							option_id = 11,
+							option_value_id	= '" . (integer)$option_value_id . "',
+							quantity = " . $qty . ",
+							subtract = 0,
+							price = 0,
+							price_prefix = '+',
+							points = 0,
+							points_prefix = '+',
+							weight = 0,
+							weight_prefix = '+'";
+						$this->db->query($sql);
+
+						if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+					}
+				}
+			} else {
+				$this->db->query("DELETE FROM " . DB_PREFIX . "product_option_value WHERE (`product_id` = " . $product_id . " AND option_id = 11)");
+			}
+			// /размеры 
+
+			// // цены - скидки
+			// $current_discounts = [];
+			// $sql = "SELECT * FROM " . DB_PREFIX . "product_discount WHERE product_id = " . $product_id . " AND customer_group_id in (" . implode(',', array_values($this->groups)) . ")";
+			// $attr_rows = $this->db->query($sql);
+			// foreach ($attr_rows->rows as $row) {
+			// 	$current_discounts[$row['customer_group_id']] = $row['price'];
+			// }
+
+			// foreach ($this->groups as $title => $gid) {
+			// 	// DISCOUNT_CODENAME - скидка для розницы
+			// 	if ($title == 'DISCOUNT') {
+			// 		continue;
+			// 	}
+
+			// 	if (!empty($product['prices'][$title])) {
+			// 		// кейс 1 - существует
+			// 		if (isset($current_discounts[$gid])) {
+			// 			// кейс 1.1 - и не совпадает - обновляем
+			// 			// if ($current_discounts[$gid] != $product['prices'][$title]) {
+			// 				$sql = "UPDATE " . DB_PREFIX . "product_discount SET 
+			// 					`price` = '" . $this->db->escape($product['prices'][$title]) . "',
+			// 					`processed` = 1
+			// 				WHERE product_id = " . (int)$product_id . " AND customer_group_id = " . (int)$gid;
+			// 				$this->db->query($sql);
+
+			// 				if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+			// 			// }
+			// 		} else {
+			// 			// кейс 2 - не существует
+			// 			$sql = "INSERT INTO " . DB_PREFIX . "product_discount SET 
+			// 				`product_id` = " . (int)$product_id . ", 
+			// 				`customer_group_id` = " . (int)$gid . ",
+			// 				`quantity` = 1, 
+			// 				`priority` = 0,
+			// 				`price` = " . (float)$product['prices'][$title] . ", 
+			// 				`processed` = 1";
+			// 			$this->db->query($sql);
+
+			// 			if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+			// 		}
+			// 	} elseif (isset($current_discounts[$gid])) {
+			// 		// нет в товаре - удаляем
+			// 		$sql = "DELETE FROM " . DB_PREFIX . "product_discount WHERE product_id = " . (int)$product_id . " AND customer_group_id = " . (int)$gid;
+			// 		$this->db->query($sql);
+
+			// 		if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+			// 	}
+			// }
+			// // /цены - скидки
+
+			// // акции
+			// $current_specials = [];
+			// $sql = "SELECT * FROM " . DB_PREFIX . "product_special WHERE product_id = " . $product_id . " AND customer_group_id in (" . implode(',', array_values($this->groups)) . ")";
+			// $attr_rows = $this->db->query($sql);
+			// foreach ($attr_rows->rows as $row) {
+			// 	$current_specials[$row['customer_group_id']] = $row['price'];
+			// }
+
+			// if (!empty($product['prices']['DISCOUNT'])) {
+			// 	$gid = 9999;
+
+			// 	// кейс 1 - существует
+			// 	if (isset($current_specials[$gid])) {
+			// 		// кейс 1.1 - и не совпадает - обновляем
+			// 		$sql = "UPDATE " . DB_PREFIX . "product_special SET 
+			// 			`price` = '" . $this->db->escape($product['prices']['DISCOUNT']) . "',
+			// 			`processed` = 1
+			// 		WHERE product_id = " . (int)$product_id . " AND customer_group_id = " . $gid;
+			// 		$this->db->query($sql);
+
+			// 		if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+			// 	} else {
+			// 		// кейс 2 - не существует
+			// 		$sql = "INSERT INTO " . DB_PREFIX . "product_special SET 
+			// 			`product_id` = " . (int)$product_id . ", 
+			// 			`customer_group_id` = " . $gid . ",
+			// 			`priority` = 0,
+			// 			`price` = " . (float)$product['prices']['DISCOUNT'] . ", 
+			// 			`processed` = 1";
+			// 		$this->db->query($sql);
+
+			// 		if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+			// 	}
+			// }
+			// // /акции
+
+			// // размеры
+			// if ((isset($product['sizes_possible'])) && (sizeof($product['sizes_possible']) > 0)) {
+			// 	// размеры вообще могут быть
+
+			// 	// option_id текстовой
+			// 	$r = $this->db->query("SELECT `product_option_id` FROM " . DB_PREFIX . "product_option po WHERE (`product_id` = " . $product_id . " AND po.`option_id` = 15)");
+			// 	if ($r->num_rows == 0) {
+			// 		// нет - добавляем
+			// 		$sql = "INSERT INTO " . DB_PREFIX . "product_option SET 
+			// 			`product_id` = " . $product_id . ", 
+			// 			`option_id` = 15, 
+			// 			`required` = 0";
+			// 		$this->db->query($sql);
+			// 	}
+			// 	// /option_id текстовой
+
+			// 	// option_id
+			// 	$r = $this->db->query("SELECT `product_option_id` FROM " . DB_PREFIX . "product_option po WHERE (`product_id` = " . $product_id . " AND po.`option_id` = 13)");
+			// 	if ($r->num_rows == 0) {
+			// 		// нет - добавляем
+			// 		$sql = "INSERT INTO " . DB_PREFIX . "product_option SET 
+			// 			`product_id` = " . $product_id . ", 
+			// 			`option_id` = 13, 
+			// 			`required` = 1";
+			// 		$this->db->query($sql);
+
+			// 		$product_option_id = $this->db->getLastId();
+			// 	} else {
+			// 		$product_option_id = $r->row['product_option_id'];
+			// 	}
+			// 	// /option_id
+
+			// 	if (sizeof($product['sizes_in_stock']) > 0) {
+			// 		// есть размеры в наличии
+
+			// 		// заполняем размеры в наличии
+			// 		$current_sizes = [];
+			// 		$sql = "SELECT * FROM " . DB_PREFIX . "product_option_value WHERE product_id = " . $product_id . " AND option_id = 13";
+			// 		$attr_rows = $this->db->query($sql);
+			// 		foreach ($attr_rows->rows as $row) {
+			// 			$current_sizes[$row['customer_group_id']][$row['option_value_id']] = $row;
+			// 		}
+
+			// 		// для контроля ненужных более опций
+			// 		$current_sizes_ = $current_sizes;
+
+			// 		// для всех групп проверяем размеры
+			// 		foreach ($this->groups as $title => $customer_group_id) {
+			// 			foreach ($product['sizes_in_stock'] as $size => $qty) {
+			// 				$option_value_id = $this->sizes[$size];
+
+			// 				// кейс 1 - существует
+			// 				if (isset($current_sizes[$customer_group_id][$option_value_id])) {
+			// 					// кейс 1.1 - и не совпадает - обновляем
+			// 					// обновим 
+			// 					$sql = "UPDATE " . DB_PREFIX . "product_option_value SET quantity = " . $qty . " WHERE (customer_group_id = " . (int)$customer_group_id . ") AND (product_option_id = " . (int)$product_option_id . ") AND (product_id = " . (int)$product_id . ") AND (option_id = 13) AND (option_value_id = '" . (integer)$option_value_id . "')";
+			// 					$this->db->query($sql);
+
+			// 					unset($current_sizes_[$customer_group_id][$option_value_id]);
+			// 				} else {
+			// 					// кейс 2 - не существует запись
+			// 					$sql = "INSERT INTO " . DB_PREFIX . "product_option_value SET 
+			// 						customer_group_id = " . (int)$customer_group_id . ",
+			// 						product_option_id = " . (int)$product_option_id . ",
+			// 						product_id = " . (int)$product_id . ",
+			// 						option_id = 13,
+			// 						option_value_id	= '" . (integer)$option_value_id . "',
+			// 						quantity = " . $qty . ",
+			// 						subtract = 0,
+			// 						price = 0,
+			// 						price_prefix = '+',
+			// 						points = 0,
+			// 						points_prefix = '+',
+			// 						weight = 0,
+			// 						weight_prefix = '+'";
+			// 					$this->db->query($sql);
+
+			// 					if ($this->debug) print $sql . ' - ' . __LINE__ . "<br/>";
+			// 				}
+			// 			}
+			// 		}
+
+			// 		// удаляем более недоступные размеры
+			// 		foreach ($current_sizes_ as $customer_group_id => $sizes) {
+			// 			foreach ($sizes as $size) {
+			// 				$sql = "DELETE FROM " . DB_PREFIX . "product_option_value WHERE product_option_value_id = " . (int)$size['product_option_value_id'];
+			// 				$this->db->query($sql);
+			// 			}
+			// 		}
+			// 		// /заполняем размеры в наличии
+			// 	} else {
+			// 		// вычищаем варианты опций
+			// 		$this->db->query("DELETE FROM " . DB_PREFIX . "product_option_value WHERE (`product_id` = " . $product_id . " AND option_id = 13)");
+			// 	}
+			// } else {
+			// 	// вычищаем
+			// 	$this->db->query("DELETE FROM " . DB_PREFIX . "product_option WHERE (`product_id` = " . $product_id . " AND option_id = 13)");
+			// 	$this->db->query("DELETE FROM " . DB_PREFIX . "product_option_value WHERE (`product_id` = " . $product_id . " AND option_id = 13)");
+
+			// 	$this->db->query("DELETE FROM " . DB_PREFIX . "product_option WHERE (`product_id` = " . $product_id . " AND option_id = 15)");
+			// 	$this->db->query("DELETE FROM " . DB_PREFIX . "product_option_value WHERE (`product_id` = " . $product_id . " AND option_id = 15)");
+			// }
+			// // /размеры
+
+			// die;
+		}
+
+		$this->load->model('catalog/product');
+		$to_delete = $this->db->query("SELECT product_id, model, sku FROM " . DB_PREFIX . "product WHERE (sync_status IS NULL) AND (`sync_ignore` != 1)")->rows;
+		foreach ($to_delete as $product) {
+			$this->model_catalog_product->deleteProduct($product['product_id']);
+			print "Удален " . $product['model'] . " (" . $product['sku'] . ")<br/>";
+		}
+
+		// $sku2id = [];
+		// $r = $this->db->query("SELECT product_id, sku FROM " . DB_PREFIX . "product")->rows;
+		// foreach ($r as $r_) {
+		// 	$sku2id[$r_['sku']] = $r_['product_id'];
+		// }
+
+		// $this->db->query("DELETE FROM " . DB_PREFIX . "product_related");
+		// foreach ($this->headsets as $group => $skus) {
+		// 	$p2p = array();
+		// 	if (sizeof($skus) > 0) {
+		// 		foreach ($skus as $sku) {
+		// 			foreach ($skus as $sku2) {
+		// 				if ($sku != $sku2) {
+		// 					$p2p[$sku][$sku2] = 1;
+		// 				}
+		// 			}
+		// 		}
+		// 	}
+
+		// 	foreach ($p2p as $sku1 => $p2p_) {
+		// 		foreach ($p2p_ as $sku2 => $devnull) {
+		// 			$sql = "INSERT IGNORE INTO " . DB_PREFIX . "product_related SET product_id = " . (int)$sku2id[$sku1] . ", related_id = " . (int)$sku2id[$sku2];
+		// 			$this->db->query($sql);
+		// 		}
+		// 	}
+		// }
+
+		// die ('ok!');
+	}
+
+	private function fillParams() {
+		// размеры
+		asort($this->sizes);
+
+		foreach ($this->sizes as $size => $devnull) {
+			$r = $this->db->query("SELECT ov.option_value_id FROM " . DB_PREFIX . "option_value ov JOIN " . DB_PREFIX . "option_value_description ovd ON ov.option_value_id = ovd.option_value_id WHERE ov.option_id = 11 AND ovd.name = '" . $this->db->escape($size) . "'");
+			if ($r->num_rows == 0) {
+				$sql = "INSERT INTO " . DB_PREFIX . "option_value SET 
+					`option_id` = 11, 
+					`sort_order` = '" . ((float)$size * 10) . "'";
+				$this->db->query($sql);
+
+				$option_value_id = $this->db->getLastId();
+
+				$sql = "INSERT INTO " . DB_PREFIX . "option_value_description SET 
+					`option_value_id` = $option_value_id, 
+					`language_id` = 1, 
+					`option_id` = 11, 
+					`name` = '" . $this->db->escape($size) . "'";
+				$this->db->query($sql);
+			} else {
+				$option_value_id = $r->row['option_value_id'];
+			}
+
+			$this->sizes[$size] = $option_value_id;
+			$this->sizes_reverse[$option_value_id] = $size;
+		}
+
+		// // коллеции
+		// $need_rebuild_cats = false;
+		// foreach ($this->collections as $collection => $category_id) {
+		// 	$r = $this->db->query("SELECT c.category_id FROM " . DB_PREFIX . "category c JOIN " . DB_PREFIX . "category_description cd ON c.category_id = cd.category_id WHERE c.parent_id = '" . COLLECTIONS_CID . "' AND c.external_id = '" . $this->db->escape($collection) . "'");
+		// 	if ($r->num_rows == 0) {
+		// 		$sql = "INSERT INTO " . DB_PREFIX . "category SET 
+		// 			`parent_id` = " . COLLECTIONS_CID . ", 
+		// 			`image` = '', 
+		// 			`column` = 1, 
+		// 			`status` = 1, 
+		// 			`external_id` = '" . $this->db->escape($collection) . "'";
+		// 		$this->db->query($sql);
+
+		// 		$category_id = $this->db->getLastId();
+
+		// 		$sql = "INSERT INTO " . DB_PREFIX . "category_description SET 
+		// 			`category_id` = $category_id, 
+		// 			`language_id` = 1, 
+		// 			`name` = '" . $this->db->escape($collection) . "'";
+		// 		$this->db->query($sql);
+
+		// 		$sql = "INSERT INTO " . DB_PREFIX . "category_to_store SET 
+		// 			category_id = '" . (int)$category_id . "', 
+		// 			store_id = 0";
+		// 		$this->db->query($sql);
+
+		// 		$keyword = $this->url_slug($collection);
+		// 		$sql = "INSERT IGNORE INTO " . DB_PREFIX . "url_alias SET 
+		// 			`query` = 'category_id=" . $category_id . "', 
+		// 			`keyword` = '" . $this->db->escape($keyword) . "'";
+		// 		$this->db->query($sql);
+
+		// 		$this->collections[$collection] = $category_id;
+		// 		$need_rebuild_cats = true;
+		// 	} else {
+		// 		$this->collections[$collection] = $category_id = $r->row['category_id'];
+		// 	}
+		// }
+
+		// if ($need_rebuild_cats) {
+		// 	$this->load->model('catalog/category');
+		// 	$this->model_catalog_category->repairCategories(0);
+		// }
+
+		// // группы
+		// foreach ($this->groups as $group_name => $customer_group_id) {
+		// 	if ($group_name == 'DISCOUNT') continue;
+
+		// 	$r = $this->db->query("SELECT og.customer_group_id FROM " . DB_PREFIX . "customer_group og JOIN " . DB_PREFIX . "customer_group_description cgd ON og.customer_group_id = cgd.customer_group_id WHERE cgd.name = '" . $this->db->escape($group_name) . "'");
+		// 	if ($r->num_rows == 0) {
+		// 		$sql = "INSERT INTO " . DB_PREFIX . "customer_group SET 
+		// 			`approval` = 1, 
+		// 			`sort_order` = '" . ((float)$group_name) . "'";
+		// 		$this->db->query($sql);
+
+		// 		$customer_group_id = $this->db->getLastId();
+
+		// 		$sql = "INSERT INTO " . DB_PREFIX . "customer_group_description SET 
+		// 			`customer_group_id` = $customer_group_id, 
+		// 			`language_id` = 1, 
+		// 			`name` = '" . $this->db->escape($group_name) . "'";
+		// 		$this->db->query($sql);
+		// 	} else {
+		// 		$customer_group_id = $r->row['customer_group_id'];
+		// 	}
+
+		// 	$this->groups[$group_name] = $customer_group_id;
+		// }
+
+		// $this->groups['Розничные клиенты'] = 1;
+		// $this->groups['Оптовые клиенты'] = 8;
+	}
+
+	public function index() {
+		$this->preParseFile();
+	}
+
+	// public function index() {
+	// 	$this->load->model('catalog/product');
+
+	// 	
+	// 	$this->fillParams();
+	// 	$this->processData();
+
+	// 	$categories = $this->db->query("SELECT category_id FROM " . DB_PREFIX . "category")->rows;
+	// 	foreach ($categories as $category) {
+	// 		$category_id = $category['category_id'];
+
+	// 		$filter_data = array(
+	// 			'filter_category_id'  => $category_id,
+	// 			'filter_sub_category' => true
+	// 		);
+
+	// 		$total = $this->getTotalProducts($filter_data);
+
+	// 		if ($total > 0) {
+	// 			$this->db->query("UPDATE " . DB_PREFIX . "category SET status = 1 WHERE category_id = " . $category_id);
+	// 		} else {
+	// 			$this->db->query("UPDATE " . DB_PREFIX . "category SET status = 0 WHERE category_id = " . $category_id);
+	// 		}
+	// 	}
+
+
+	// 	$this->cache->delete('product');
+	// 	$this->cache->delete('category');
+	// 	$this->cache->delete('seo_pro');
+	// 	die;
+
+	// 	// print '<pre>';
+	// 	// print_r($this->db->query("SELECT * FROM " . DB_PREFIX . "product_discount WHERE processed = 0")->rows);
+	// 	// print '</pre>';
+
+	// 	// $sql = "DELETE FROM " . DB_PREFIX . "product_discount WHERE processed = 0";
+	// 	// $this->db->query($sql);
+
+	// 	// $sql = "UPDATE " . DB_PREFIX . "product_discount SET processed = NULL";
+	// 	// $this->db->query($sql);
+
+	// 	// $sql = "DELETE FROM " . DB_PREFIX . "product_special WHERE processed = 0";
+	// 	// $this->db->query($sql);
+
+	// 	// $sql = "UPDATE " . DB_PREFIX . "product_special SET processed = NULL";
+	// 	// $this->db->query($sql);
+
+	// 	// $this->model_catalog_product->updateSearchOptions();
+
+	// 	die('ok!');
+	// }
+}

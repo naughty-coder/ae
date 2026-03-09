@@ -1,0 +1,121 @@
+<?php echo $header; ?>
+    <?php include_once(dirname(__FILE__) . '/../chunks/breadcrumbs.tpl'); ?>
+
+    <?php echo $content_top; ?>
+    <section id="heading">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-12">
+                    <h1><?php print $heading_title; ?></h1>
+                </div>
+            </div>
+        </div>
+    </section>
+
+	<section id="checkout">
+		<div class="container-fluid">
+			<div class="row">
+				<div class="col-12 b-checkout">
+					<form action="" method="POST" enctype="multipart/form-data" id="checkout_form_ul">
+						<div class="form-group b-type">
+							<label class="b-heading">Выберите тип заказа</label>
+							<div class="b-radio">
+								<input type="radio" name="type" value="1" id="type_invoice" checked />							
+								<label for="type_invoice">Счет на оплату</label>
+
+								<input type="radio" name="type" value="2" id="type_commers" />							
+								<label for="type_commers">Коммерческое предложение</label>
+
+								<?php /*
+								<input type="radio" name="type" value="3" id="type_nmck" />							
+								<label for="type_nmck">Исследование для обоснования НМЦК</label>
+								*/ ?>
+							</div>
+						</div>
+
+						<div class="b-inputs">
+							<div class="form-group">
+								<label class="b-heading b-requisites-label">Реквизиты покупателя</label>
+
+								<label for="contact-companyname">Название организации <i>*</i></label>
+								<input type="text" class="form-control" name="company_name" id="contact-companyname" placeholder="">
+							</div>
+
+							<div class="row">
+								<div class="col b-inn-col">
+									<div class="form-group">
+										<label for="contact-mail">ИНН <i>*</i></label>
+										<input type="text" class="form-control" name="company_inn" id="contact-mail" placeholder="">
+									</div>
+								</div>
+
+								<div class="w-100 d-lg-none"></div>
+
+								<div class="col b-kpp-col">
+									<div class="form-group">
+										<label for="contact-mail">КПП</label>
+										<input type="text" class="form-control" name="company_kpp" id="contact-mail" placeholder="">
+									</div>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label for="contact-name">ФИО контактного лица <i>*</i></label>
+								<input class="form-control" name="firstname" id="contact-name" placeholder=""/>
+							</div>
+
+							<div class="form-group">
+								<label for="contact-phone">Адрес грузополучателя <i>*</i></label>
+								<input type="text" class="form-control" name="address_1" id="contact-phone" placeholder="">
+							</div>
+
+							<div class="row">
+								<div class="col b-phone-col">
+									<div class="form-group">
+										<label for="contact-mail">Телефон <i>*</i></label>
+										<input type="tel" class="form-control" name="telephone" id="contact-mail" placeholder="" value="">
+									</div>
+								</div>
+								<div class="col b-mail-col">
+									<div class="form-group">
+										<label for="contact-mail">Электронная почта <i>*</i></label>
+										<input type="text" class="form-control" name="email" id="contact-mail" placeholder="">
+									</div>
+								</div>
+							</div>
+
+							<div class="form-group b-delivery">
+								<label class="b-heading">Выберите способ доставки</label>
+								<div class="b-radio">
+									<input type="radio" name="shipping_method" value="Деловые линии" id="delivery_1" checked />							
+									<label for="delivery_1">Деловые линии</label>
+
+									<input type="radio" name="shipping_method" value="Самовывоз в Москве" id="delivery_2" />							
+									<label for="delivery_2">Самовывоз в Москве</label>
+								</div>
+							</div>
+
+							<div class="form-group">
+								<label for="contact-message">Дополнительные комментарии</label>
+								<textarea type="text" class="form-control" name="comment" id="contact-message" placeholder=""></textarea>
+							</div>
+
+							<?php include(DIR_TEMPLATE . 'default/template/chunks/captcha.tpl'); ?>
+
+							<div class="form-group">
+								<p class="b-hint">Нажимая на кнопку “Отправить заказ” я даю своё согласие на обработку моих персональных данных в соответствии с Федеральным законом №152-ФЗ</p>
+							</div>
+
+							<div class="b-buttons row align-items-center justify-content-between">
+								<div class="col-auto forward-wrapper">
+									<button type="submit" class="b-btn">Отправить заказ</button>
+								</div>
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	</section>
+
+<?php echo $footer; ?>
