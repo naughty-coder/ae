@@ -9,6 +9,8 @@ class ControllerProductCategory extends Controller {
 
 		$this->load->model('tool/image');
 
+		$this->load->model('design/banner');
+
       if (isset($this->request->get['filter'])) {
 			$filter = $this->request->get['filter'];
 		} else {
@@ -483,6 +485,61 @@ class ControllerProductCategory extends Controller {
       
 
 			$data['continue'] = $this->url->link('common/home');
+
+			// Left sidebar banner
+			$data['banners_left'] = array();
+			$results = $this->model_design_banner->getBanner(defined('BANNER_LEFT_ID') ? BANNER_LEFT_ID : 3);
+			foreach ($results as $result) {
+				if (is_file(DIR_IMAGE . $result['image'])) {
+					$data['banners_left'][] = array(
+						'image' => $this->model_tool_image->resize($result['image'], 270, 460),
+						'href'  => $result['link'],
+						'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+					);
+				}
+			}
+
+			// Featured products for left sidebar
+			$data['featureds'] = array();
+			$featureds = $this->db->query("SELECT * FROM " . DB_PREFIX . "module WHERE code = 'featured' ORDER BY `name`")->rows;
+			foreach ($featureds as $featured) {
+				$setting = json_decode($featured['setting'], 1);
+				if ($setting['status']) {
+					$featured_item = array('name' => $setting['name'], 'products' => array());
+					foreach ($setting['product'] as $product_id) {
+						$product_info = $this->model_catalog_product->getProduct($product_id);
+						if ($product_info) {
+							$image = $product_info['image']
+								? $this->model_tool_image->resize($product_info['image'], 70, 84)
+								: $this->model_tool_image->resize('placeholder.png', 70, 84);
+							$image2 = $product_info['image2']
+								? $this->model_tool_image->resize($product_info['image2'], 70, 84)
+								: false;
+							if ($this->customer->isLogged() || !$this->config->get('config_customer_price')) {
+								$price = $this->currency->format($this->tax->calculate($product_info['price'], $product_info['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
+							} else {
+								$price = false;
+							}
+							if ((float)$product_info['special']) {
+								$special = $this->currency->format($this->tax->calculate($product_info['special'], $product_info['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
+							} else {
+								$special = false;
+							}
+							$featured_item['products'][] = array(
+								'product_id' => $product_info['product_id'],
+								'thumb'      => $image,
+								'thumb2'     => $image2,
+								'name'       => $product_info['name'],
+								'price'      => $price,
+								'special'    => $special,
+								'href'       => $this->url->link('product/product', 'product_id=' . $product_info['product_id']),
+							);
+						}
+					}
+					$data['featureds'][] = $featured_item;
+					break; // Only first featured module for sidebar
+				}
+			}
 
 			$data['column_left'] = $this->load->controller('common/column_left');
 			$data['column_right'] = $this->load->controller('common/column_right');

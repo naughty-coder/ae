@@ -259,28 +259,23 @@ class ControllerProductProduct extends Controller {
 			$data['images'] = array();
 
 			if ($product_info['image']) {
-				$data['popup'] = $this->model_tool_image->resize($product_info['image'], $this->config->get('theme_' . $this->config->get('config_theme') . '_image_popup_width'), $this->config->get('theme_' . $this->config->get('config_theme') . '_image_popup_height'));
+				$data['popup'] = $this->model_tool_image->resize($product_info['image'], 800, 800);
+				$data['images'][] = array(
+					'popup' => $data['popup'],
+					'large' => $this->model_tool_image->resize($product_info['image'], 570, 684),
+					'thumb' => $this->model_tool_image->resize($product_info['image'], 97, 116),
+				);
 			} else {
 				$data['popup'] = '';
 			}
-
-			// if ($product_info['image']) {
-			// 	$data['thumb'] = $this->model_tool_image->resize($product_info['image'], $this->config->get('theme_' . $this->config->get('config_theme') . '_image_thumb_width'), $this->config->get('theme_' . $this->config->get('config_theme') . '_image_thumb_height'));
-			// } else {
-			// 	$data['thumb'] = '';
-			// }
-
-			$data['images'][] = array(
-				'popup' => $data['popup'],
-				// 'thumb' => $data['thumb'],
-			);
 
 			$results = $this->model_catalog_product->getProductImages($this->request->get['product_id']);
 
 			foreach ($results as $result) {
 				$data['images'][] = array(
-					'popup' => $this->model_tool_image->resize($result['image'], $this->config->get('theme_' . $this->config->get('config_theme') . '_image_popup_width'), $this->config->get('theme_' . $this->config->get('config_theme') . '_image_popup_height')),
-					// 'thumb' => $this->model_tool_image->resize($result['image'], $this->config->get('theme_' . $this->config->get('config_theme') . '_image_additional_width'), $this->config->get('theme_' . $this->config->get('config_theme') . '_image_additional_height'))
+					'popup' => $this->model_tool_image->resize($result['image'], 800, 800),
+					'large' => $this->model_tool_image->resize($result['image'], 570, 684),
+					'thumb' => $this->model_tool_image->resize($result['image'], 97, 116),
 				);
 			}
 
@@ -388,10 +383,11 @@ class ControllerProductProduct extends Controller {
 
 			foreach ($results as $result) {
 				if ($result['image']) {
-					$image = $this->model_tool_image->resize($result['image'], $this->config->get('theme_' . $this->config->get('config_theme') . '_image_related_width'), $this->config->get('theme_' . $this->config->get('config_theme') . '_image_related_height'));
+					$image = $this->model_tool_image->resize($result['image'], 240, 288);
 				} else {
-					$image = $this->model_tool_image->resize('placeholder.png', $this->config->get('theme_' . $this->config->get('config_theme') . '_image_related_width'), $this->config->get('theme_' . $this->config->get('config_theme') . '_image_related_height'));
+					$image = $this->model_tool_image->resize('placeholder.png', 240, 288);
 				}
+				$image2 = $result['image2'] ? $this->model_tool_image->resize($result['image2'], 240, 288) : false;
 
 				if ($this->customer->isLogged() || !$this->config->get('config_customer_price')) {
 					$price = $this->currency->format($this->tax->calculate($result['price'], $result['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
@@ -420,6 +416,7 @@ class ControllerProductProduct extends Controller {
 				$data['products'][] = array(
 					'product_id'  => $result['product_id'],
 					'thumb'       => $image,
+					'thumb2'      => $image2,
 					'name'        => $result['name'],
 					'description' => utf8_substr(trim(strip_tags(html_entity_decode($result['description'], ENT_QUOTES, 'UTF-8'))), 0, $this->config->get('theme_' . $this->config->get('config_theme') . '_product_description_length')) . '..',
 					'price'       => $price,
@@ -447,7 +444,63 @@ class ControllerProductProduct extends Controller {
 			$data['recurrings'] = $this->model_catalog_product->getProfiles($this->request->get['product_id']);
 
 			$this->model_catalog_product->updateViewed($this->request->get['product_id']);
-			
+
+			// Left sidebar banner
+			$this->load->model('design/banner');
+			$data['banners_left'] = array();
+			$results = $this->model_design_banner->getBanner(defined('BANNER_LEFT_ID') ? BANNER_LEFT_ID : 3);
+			foreach ($results as $result) {
+				if (is_file(DIR_IMAGE . $result['image'])) {
+					$data['banners_left'][] = array(
+						'image' => $this->model_tool_image->resize($result['image'], 270, 460),
+						'href'  => $result['link'],
+						'name'  => html_entity_decode($result['title'], ENT_QUOTES, 'UTF-8'),
+					);
+				}
+			}
+
+			// Featured products for left sidebar
+			$data['featureds_sidebar'] = array();
+			$featureds = $this->db->query("SELECT * FROM " . DB_PREFIX . "module WHERE code = 'featured' ORDER BY `name`")->rows;
+			foreach ($featureds as $featured) {
+				$setting = json_decode($featured['setting'], 1);
+				if ($setting['status']) {
+					$featured_item = array('name' => $setting['name'], 'products' => array());
+					foreach ($setting['product'] as $product_id_f) {
+						$product_info_f = $this->model_catalog_product->getProduct($product_id_f);
+						if ($product_info_f) {
+							$img = $product_info_f['image']
+								? $this->model_tool_image->resize($product_info_f['image'], 70, 84)
+								: $this->model_tool_image->resize('placeholder.png', 70, 84);
+							$img2 = $product_info_f['image2']
+								? $this->model_tool_image->resize($product_info_f['image2'], 70, 84)
+								: false;
+							if ($this->customer->isLogged() || !$this->config->get('config_customer_price')) {
+								$p = $this->currency->format($this->tax->calculate($product_info_f['price'], $product_info_f['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
+							} else {
+								$p = false;
+							}
+							if ((float)$product_info_f['special']) {
+								$sp = $this->currency->format($this->tax->calculate($product_info_f['special'], $product_info_f['tax_class_id'], $this->config->get('config_tax')), $this->session->data['currency']);
+							} else {
+								$sp = false;
+							}
+							$featured_item['products'][] = array(
+								'product_id' => $product_info_f['product_id'],
+								'thumb'      => $img,
+								'thumb2'     => $img2,
+								'name'       => $product_info_f['name'],
+								'price'      => $p,
+								'special'    => $sp,
+								'href'       => $this->url->link('product/product', 'product_id=' . $product_info_f['product_id']),
+							);
+						}
+					}
+					$data['featureds_sidebar'][] = $featured_item;
+					break;
+				}
+			}
+
 			$data['column_left'] = $this->load->controller('common/column_left');
 			$data['column_right'] = $this->load->controller('common/column_right');
 			$data['content_top'] = $this->load->controller('common/content_top');
