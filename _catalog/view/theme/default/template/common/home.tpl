@@ -24,11 +24,7 @@
 										<div class="swiper-viewport">
 											<div id="slideshow0" class="slideshow-main swiper-container">
 												<div class="swiper-wrapper">
-													<?php if (defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) { ?>
-													<div class="swiper-slide text-center">
-														<img src="catalog/view/theme/default/image/demo/banners/slider-01-1185x590.jpg" alt="slider" class="img-responsive" />
-													</div>
-													<?php } else { ?>
+													<?php if (sizeof($banners_slider) > 0) { ?>
 													<?php foreach ($banners_slider as $banner) { ?>
 													<div class="swiper-slide text-center">
 														<a href="<?php echo $banner['href']; ?>">
@@ -36,6 +32,10 @@
 														</a>
 													</div>
 													<?php } ?>
+													<?php } else { ?>
+													<div class="swiper-slide text-center">
+														<img src="/image/catalog/demo/banners/slider-01-1185x590.jpg" alt="slider" class="img-responsive" />
+													</div>
 													<?php } ?>
 												</div>
 												<div class="swiper-pagination slideshow0"></div>
@@ -50,19 +50,10 @@
 									<div id="aecmsrightbanner" class="col-xs-3">
 										<div class="aerightbannerblock">
 											<div class="aerightbanner-left">
-												<?php if (defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) { ?>
-												<div class="aerightbanner1 aerightbanner">
-													<div class="aerightbanner-img"><a href="#"><img src="catalog/view/theme/default/image/demo/banners/right-banner1-381x277.jpg" alt="Right Banner 1"></a></div>
-												</div>
-												<div class="aerightbanner2 aerightbanner">
-													<div class="aerightbanner-img"><a href="#"><img src="catalog/view/theme/default/image/demo/banners/right-banner2-381x277.jpg" alt="Right Banner 2"></a></div>
-												</div>
-												<?php } else { ?>
 												<?php foreach ($banners_right as $bi => $banner) { ?>
 												<div class="aerightbanner<?php echo $bi + 1; ?> aerightbanner">
 													<div class="aerightbanner-img"><a href="<?php echo $banner['href']; ?>"><img src="<?php echo $banner['image']; ?>" alt="<?php echo $banner['name']; ?>"></a></div>
 												</div>
-												<?php } ?>
 												<?php } ?>
 											</div>
 										</div>
@@ -96,12 +87,12 @@
 									<div class="swiper-viewport">
 										<div id="banner0" class="swiper-container">
 											<div class="swiper-wrapper">
-												<?php if (defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) { ?>
-												<div class="swiper-slide"><a href="#"><img src="catalog/view/theme/default/image/demo/banners/left-banner-270x460.jpg" alt="Left-Banner" class="img-responsive" /></a></div>
-												<?php } else { ?>
+												<?php if (sizeof($banners_left) > 0) { ?>
 												<?php foreach ($banners_left as $banner) { ?>
 												<div class="swiper-slide"><a href="<?php echo $banner['href']; ?>"><img src="<?php echo $banner['image']; ?>" alt="<?php echo $banner['name']; ?>" class="img-responsive" /></a></div>
 												<?php } ?>
+												<?php } else { ?>
+												<div class="swiper-slide"><img src="/image/catalog/demo/banners/left-banner-270x460.jpg" alt="Left-Banner" class="img-responsive" /></div>
 												<?php } ?>
 											</div>
 										</div>
@@ -203,26 +194,17 @@
 									<?php } ?>
 
 									<!-- Bottom Banners -->
-									<?php if ((defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) || sizeof($banners_bottom) > 0) { ?>
+									<?php if (sizeof($banners_bottom) > 0) { ?>
 									<div class="html-content">
 										<div class="box-content">
 											<div class="bottombanner-container">
 												<div class="row">
-													<?php if (defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) { ?>
-													<div class="bottombanner col-xs-6 bottombanner-1">
-														<a href="#"><img src="catalog/view/theme/default/image/demo/banners/bottom-banner1-555x260.jpg" alt="Bottom Banner 1"></a>
-													</div>
-													<div class="bottombanner col-xs-6 bottombanner-2">
-														<a href="#"><img src="catalog/view/theme/default/image/demo/banners/bottom-banner2-555x260.jpg" alt="Bottom Banner 2"></a>
-													</div>
-													<?php } else { ?>
 													<?php foreach ($banners_bottom as $bi => $banner) { ?>
 													<div class="bottombanner col-xs-6 bottombanner-<?php echo $bi + 1; ?>">
 														<a href="<?php echo $banner['href']; ?>">
 														<img src="<?php echo $banner['image']; ?>" alt="<?php echo $banner['name']; ?>">
 														</a>
 													</div>
-													<?php } ?>
 													<?php } ?>
 												</div>
 											</div>
@@ -293,26 +275,17 @@
 									<?php } ?>
 
 									<!-- Sub Banners -->
-									<?php if ((defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) || sizeof($banners_sub) > 0) { ?>
+									<?php if (sizeof($banners_sub) > 0) { ?>
 									<div class="html-content">
 										<div class="box-content">
 											<div class="subbanner-container">
 												<div class="row">
-													<?php if (defined('USE_DEMO_BANNERS') && USE_DEMO_BANNERS) { ?>
-													<div class="subbanner col-xs-6 subbanner-1">
-														<a href="#"><img src="catalog/view/theme/default/image/demo/banners/sub-banner1-555x260.jpg" alt="Sub Banner 1"></a>
-													</div>
-													<div class="subbanner col-xs-6 subbanner-2">
-														<a href="#"><img src="catalog/view/theme/default/image/demo/banners/sub-banner2-555x260.jpg" alt="Sub Banner 2"></a>
-													</div>
-													<?php } else { ?>
 													<?php foreach ($banners_sub as $bi => $banner) { ?>
 													<div class="subbanner col-xs-6 subbanner-<?php echo $bi + 1; ?>">
 														<a href="<?php echo $banner['href']; ?>">
 														<img src="<?php echo $banner['image']; ?>" alt="<?php echo $banner['name']; ?>">
 														</a>
 													</div>
-													<?php } ?>
 													<?php } ?>
 												</div>
 											</div>

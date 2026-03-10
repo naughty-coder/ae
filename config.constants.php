@@ -6,7 +6,3 @@ if (!defined('BANNER_RIGHT_ID'))   define('BANNER_RIGHT_ID', 2);    // Right sid
 if (!defined('BANNER_LEFT_ID'))    define('BANNER_LEFT_ID', 3);     // Left sidebar banner
 if (!defined('BANNER_BOTTOM_ID'))  define('BANNER_BOTTOM_ID', 4);   // Bottom banners inside tabs (2 items)
 if (!defined('BANNER_SUB_ID'))     define('BANNER_SUB_ID', 5);      // Sub banners (2 items)
-
-// Set to true to show demo/placeholder banners from template when no banners are loaded in DB
-// Set to false to use banners from DB only
-if (!defined('USE_DEMO_BANNERS'))  define('USE_DEMO_BANNERS', true);
